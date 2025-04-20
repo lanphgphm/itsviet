@@ -1,7 +1,7 @@
 package main
 
 import (
-	// "fmt"
+	"fmt"
 	// "strings"
 	"unicode"
 
@@ -50,6 +50,7 @@ func (vp *VProcessor) Process(keyStr string, keyCode byte, state uint16) (bool, 
 		n := len(vp.buffer)
 		if n > 0 {
 			vp.buffer = vp.buffer[:n-1]
+			fmt.Printf("Buffer after backspace: '%s'\n", vp.buffer)
 		}
 		return false, ""
 	}
@@ -61,17 +62,20 @@ func (vp *VProcessor) Process(keyStr string, keyCode byte, state uint16) (bool, 
 
 	// dont intercept anything thats not a letter 
 	if !unicode.IsLetter(rune(keyStr[0])) {
+		fmt.Printf("Non-letter key detected: '%s' - clearing buffer\n", keyStr)
 		vp.buffer = ""
 		return false, ""
 	}
 
 	// intercept only alphabetical characters 
 	vp.buffer += keyStr
+	fmt.Printf("Buffer: '%s'\n", vp.buffer)
 	needsTransform, transformed := vp.applyTelex()
 
 	if needsTransform {
-		// clear buffer & return transformed text to inject later
-		vp.buffer = ""
+		fmt.Printf("Transform triggered! Result: '%s'\n", transformed)
+		vp.buffer = transformed
+		fmt.Printf("Buffer set to remaining: '%s'\n", vp.buffer)
 		return true, transformed
 	}
 

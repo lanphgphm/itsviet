@@ -67,6 +67,12 @@ func grabKeyboard(X *xgbutil.XUtil) {
 	}
 }
 
+// Replay: 	Forward as if never grabbed
+// Sync: 	Process event normally but need to maintain control for next event 
+//     		--> building complex key sequences 
+// Async: 	Fully handled event, want keyboard processing to continue without 
+//			waiting for next AllowEvents() call 
+//			--> for events we completely eat
 func setupGlobalKeyCapturing(X *xgbutil.XUtil, vp *VProcessor) {
 	// GrabKeyboard makes it such that the application process always 
 	// gets a hold of the keyboard, which means the key injection always 
@@ -80,9 +86,14 @@ func setupGlobalKeyCapturing(X *xgbutil.XUtil, vp *VProcessor) {
 			focusedWindow := getFocusedWindow(X)
 			keyStr := keybind.LookupString(X, e.State, e.Detail)
 			modStr := keybind.ModifierString(e.State)
-
 			fmt.Printf("Key pressed: %s (with modifiers: %s)\n", keyStr, modStr)
 			
+			if e.State&xproto.ModMaskControl != 0 && (keyStr == "c" || keyStr == "C") {
+                fmt.Println("Detected Ctrl+C, releasing keyboard")
+                xproto.UngrabKeyboard(X.Conn(), xproto.TimeCurrentTime)
+                return
+            }
+
 			if e.State&xproto.ModMask4 != 0 && keyStr == KEY_SPACE {
 				// Super+Space to toggle vietnamese typing
 				vp.Toggle()
@@ -91,18 +102,27 @@ func setupGlobalKeyCapturing(X *xgbutil.XUtil, vp *VProcessor) {
 				} else {
 					fmt.Println("Vietnamese typing disabled.")
 				}
-				return 
+				xproto.AllowEvents(X.Conn(), xproto.AllowAsyncKeyboard, xproto.TimeCurrentTime)
+                return 
 			}
 
-			intercepted, transformedText := vp.Process(keyStr, byte(e.Detail), e.State)
-			if intercepted {
-				inject(X, transformedText, focusedWindow)
+			// For most modifier combinations, just pass them through
+            if e.State != 0 && e.State != xproto.ModMaskShift {
+                xproto.AllowEvents(X.Conn(), xproto.AllowReplayKeyboard, xproto.TimeCurrentTime)
+                return
+            }
 
-				// use ReplayKeyboard to prevent sending original key (effectively intercepting)
-				xproto.AllowEvents(X.Conn(), xproto.AllowReplayKeyboard, xproto.TimeCurrentTime)
-			} else {
-				xproto.AllowEvents(X.Conn(), xproto.AllowSyncKeyboard, xproto.TimeCurrentTime)
-			}
+			if vp.enabled && len(keyStr) == 1 && 
+               ((keyStr[0] == ' ')|| (keyStr[0] >= 'a' && keyStr[0] <= 'z') || (keyStr[0] >= 'A' && keyStr[0] <= 'Z')) {
+                
+                intercepted, transformedText := vp.Process(keyStr, byte(e.Detail), e.State)
+                if intercepted {
+                    inject(X, transformedText, focusedWindow)
+                    xproto.AllowEvents(X.Conn(), xproto.AllowAsyncKeyboard, xproto.TimeCurrentTime)
+                    return
+                }
+            }
+			xproto.AllowEvents(X.Conn(), xproto.AllowAsyncKeyboard, xproto.TimeCurrentTime)			
 		}).Connect(X, X.RootWin())
 }
 
