@@ -2,6 +2,9 @@ package main
 
 import (
 	"fmt"
+	"os/exec"
+	"strings"
+	"time"
 
 	"github.com/BurntSushi/xgb/xproto"
 	"github.com/BurntSushi/xgb/xtest"
@@ -45,7 +48,7 @@ func getFocusedWindow(X *xgbutil.XUtil) xproto.Window {
 	return reply.Focus
 }
 
-func setupGlobalKeyCapturing(X *xgbutil.XUtil, vp *VProcessor){
+func grabKeyboard(X *xgbutil.XUtil) {
 	cookie := xproto.GrabKeyboard(
 		X.Conn(), 
 		true, 
@@ -62,6 +65,15 @@ func setupGlobalKeyCapturing(X *xgbutil.XUtil, vp *VProcessor){
 	if reply.Status != xproto.GrabStatusSuccess {
 		panic(fmt.Sprintf("Grab keyboard failed: %v", err))
 	}
+}
+
+func setupGlobalKeyCapturing(X *xgbutil.XUtil, vp *VProcessor) {
+	// GrabKeyboard makes it such that the application process always 
+	// gets a hold of the keyboard, which means the key injection always 
+	// injects to itsviet process --> unable to inject to focused window, 
+	// despite correctly identifying the focused window. 
+	// --> temporarily release (Ungrab) keyboard for pasting in inject()
+	grabKeyboard(X)
 
 	xevent.KeyPressFun(
 		func(X *xgbutil.XUtil, e xevent.KeyPressEvent) {
@@ -94,38 +106,52 @@ func setupGlobalKeyCapturing(X *xgbutil.XUtil, vp *VProcessor){
 		}).Connect(X, X.RootWin())
 }
 
-var unicodeToKeysym = map[rune]string {
-	'â': "acircumflex",
-} 
 
 // xtest.FakeInput() requires a keycode (as if presented on the physical
 // keyboard) to "fake" the keypress event. Since most Vietnamese characters
 // do not have such a key on the standard keyboard layout, this is not 
-// suitable for interception
+// suitable for interception --> use X clipboard approach to inject w/o keycode
 func inject(X *xgbutil.XUtil, text string, window xproto.Window) {
 	fmt.Printf("Injecting: %s\n", text)
 
-	for _, char := range text {
-		symName, ok := unicodeToKeysym[char]
+	// // backup original clipboard 
+	// var originalClipboard string 
+	// backupCmd := exec.Command("xclip", "-selection", "clipboard", "-o")
+	// backupOutput, err := backupCmd.Output()
+	// if err == nil {
+	// 	originalClipboard = string(backupOutput)
+	// } else {
+	// 	panic(fmt.Sprintf("Failed to backup clipboard: %v\n", err))
+	// }
 
-		if ok {
-			keycodes := keybind.StrToKeycodes(X, symName)
-			if len(keycodes) > 0 {
-				keycode := keycodes[0]
-				xtest.FakeInput(X.Conn(), xproto.KeyPress, byte(keycode), 0, window, 0, 0, 0)
-                xtest.FakeInput(X.Conn(), xproto.KeyRelease, byte(keycode), 0, window, 0, 0, 0)
-            } else {
-                fmt.Printf("No keycode found for: %s\n", symName)
-            }
-		} else {
-			keycodes := keybind.StrToKeycodes(X, string(char))
-            if len(keycodes) > 0 {
-                keycode := keycodes[0]
-                xtest.FakeInput(X.Conn(), xproto.KeyPress, byte(keycode), 0, window, 0, 0, 0)
-                xtest.FakeInput(X.Conn(), xproto.KeyRelease, byte(keycode), 0, window, 0, 0, 0)
-            } else {
-                fmt.Printf("No keycode found for character: %s (Unicode: %U)\n", string(char), char)
-            }
-		}
+	// setup clipboard to hold text before injection 
+	cmd := exec.Command("xclip", "-selection", "clipboard", "-i")
+	cmd.Stdin = strings.NewReader(text)
+	err := cmd.Run() 
+	if err != nil {
+		panic(fmt.Sprintf("Failed to borrow clipboard: %v\n", err))
 	}
+
+	// Release keyboard grab to paste to `window`
+	xproto.UngrabKeyboard(X.Conn(), xproto.TimeCurrentTime)
+	time.Sleep(23*time.Millisecond) // wait for ungrab keyboard done
+
+	// simulate Ctrl+V to paste injected text 
+	ctrlKeycode := keybind.StrToKeycodes(X, "Control_L")[0]
+    vKeycode := keybind.StrToKeycodes(X, "v")[0]
+    xtest.FakeInput(X.Conn(), xproto.KeyPress, byte(ctrlKeycode), 0, window, 0, 0, 0)
+    xtest.FakeInput(X.Conn(), xproto.KeyPress, byte(vKeycode), 0, window, 0, 0, 0)
+    xtest.FakeInput(X.Conn(), xproto.KeyRelease, byte(vKeycode), 0, window, 0, 0, 0)
+    xtest.FakeInput(X.Conn(), xproto.KeyRelease, byte(ctrlKeycode), 0, window, 0, 0, 0)
+    
+	time.Sleep(24*time.Millisecond) // wait for pasting to be done 
+
+	// // restore original clipboard if there was one
+    // if originalClipboard != "" {
+    //     restoreCmd := exec.Command("xclip", "-selection", "clipboard", "-i")
+    //     restoreCmd.Stdin = strings.NewReader(originalClipboard)
+    //     restoreCmd.Run()
+    // }
+
+	grabKeyboard(X)
 }

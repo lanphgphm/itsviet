@@ -1,6 +1,8 @@
 package main
 
 import (
+	// "fmt"
+	// "strings"
 	"unicode"
 
 	"github.com/BurntSushi/xgb/xproto"
@@ -73,7 +75,8 @@ func (vp *VProcessor) Process(keyStr string, keyCode byte, state uint16) (bool, 
 		return true, transformed
 	}
 
-	return true, keyStr
+	// return true, keyStr
+	return false, ""
 }
 
 func (vp *VProcessor) applyTelex() (bool, string) {
