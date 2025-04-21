@@ -4,8 +4,6 @@ import (
 	"fmt"
 	// "strings"
 	"unicode"
-
-	"github.com/BurntSushi/xgb/xproto"
 )
 
 type VProcessor struct {
@@ -33,21 +31,10 @@ func (vp *VProcessor) Process(keyStr string, keyCode byte, state uint16) (bool, 
 		- Alphabetical character: Intercept (this is the target)
 	*/
 
-	if !vp.enabled {
-		return false, ""
-	}
-
-	// check for modifier, skip all but allow shift 
-	// if shift is pressed --> false 
-	// if ctrl+shift is pressed --> true
-	if state&^xproto.ModMaskShift != 0 {
-		return false, ""
-	}
-
 	// BACKSPACE := 22 
-	// if keyCode == BACKSPACE 
 	if keyCode == 22 {
 		n := len(vp.buffer)
+		fmt.Printf("Buffer before backspace: '%s'\n", vp.buffer)
 		if n > 0 {
 			vp.buffer = vp.buffer[:n-1]
 			fmt.Printf("Buffer after backspace: '%s'\n", vp.buffer)
@@ -55,16 +42,12 @@ func (vp *VProcessor) Process(keyStr string, keyCode byte, state uint16) (bool, 
 		return false, ""
 	}
 
-	// placeholder to skip special keys, function keys 
-	if keyCode < 10 || len(keyStr) != 1 {
-		return false, ""
-	}
-
 	// dont intercept anything thats not a letter 
 	if !unicode.IsLetter(rune(keyStr[0])) {
+		remainBuffer := vp.buffer + keyStr
 		fmt.Printf("Non-letter key detected: '%s' - clearing buffer\n", keyStr)
 		vp.buffer = ""
-		return false, ""
+		return true, remainBuffer
 	}
 
 	// intercept only alphabetical characters 
@@ -75,11 +58,10 @@ func (vp *VProcessor) Process(keyStr string, keyCode byte, state uint16) (bool, 
 	if needsTransform {
 		fmt.Printf("Transform triggered! Result: '%s'\n", transformed)
 		vp.buffer = transformed
-		fmt.Printf("Buffer set to remaining: '%s'\n", vp.buffer)
-		return true, transformed
+		// return true, transformed
+		return false, ""
 	}
 
-	// return true, keyStr
 	return false, ""
 }
 

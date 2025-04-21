@@ -13,10 +13,6 @@ import (
 	"github.com/BurntSushi/xgbutil/xevent"
 )
 
-const (
-	KEY_SPACE = " "
-)
-
 func main () {
 	// initialize new connection to X11 server 
 	X, err := xgbutil.NewConn()
@@ -86,7 +82,8 @@ func setupGlobalKeyCapturing(X *xgbutil.XUtil, vp *VProcessor) {
 			focusedWindow := getFocusedWindow(X)
 			keyStr := keybind.LookupString(X, e.State, e.Detail)
 			modStr := keybind.ModifierString(e.State)
-			fmt.Printf("Key pressed: %s (with modifiers: %s)\n", keyStr, modStr)
+			fmt.Printf("Key pressed: %s (length: %d, code: %d) (with modifiers: %s)\n", keyStr, len(keyStr), e.Detail, modStr)
+            
 			
 			if e.State&xproto.ModMaskControl != 0 && (keyStr == "c" || keyStr == "C") {
                 fmt.Println("Detected Ctrl+C, releasing keyboard")
@@ -94,7 +91,7 @@ func setupGlobalKeyCapturing(X *xgbutil.XUtil, vp *VProcessor) {
                 return
             }
 
-			if e.State&xproto.ModMask4 != 0 && keyStr == KEY_SPACE {
+			if e.State&xproto.ModMask4 != 0 && keyStr == " " {
 				// Super+Space to toggle vietnamese typing
 				vp.Toggle()
 				if vp.enabled {
@@ -106,21 +103,59 @@ func setupGlobalKeyCapturing(X *xgbutil.XUtil, vp *VProcessor) {
                 return 
 			}
 
+			shouldPassThrough := false
+			if e.State != 0 && e.State != xproto.ModMaskShift {
+                shouldPassThrough = true
+            }
+			if e.Detail >= 67 && e.Detail <= 76 {
+                shouldPassThrough = true
+            }
+			passThroughKeys := map[string]bool{
+                "Escape": true,
+                "Tab": true,
+                "Print": true,
+                "Scroll_Lock": true,
+                "Pause": true,
+                "Insert": true,
+                "Delete": true,
+                "Home": true,
+                "End": true,
+                "Prior": true,        // Page Up
+                "Next": true,         // Page Down
+                "Up": true,
+                "Down": true,
+                "Left": true,
+                "Right": true,
+                "Menu": true,         // Context menu key
+                "Caps_Lock": true,
+                "Num_Lock": true,
+                "Super_L": true,      // Windows/Super key
+                "Super_R": true,
+                "Alt_L": true,
+                "Alt_R": true,
+                "Control_L": true,
+                "Control_R": true,
+                "Shift_L": true,
+                "Shift_R": true,
+            }
+            if passThroughKeys[keyStr] {
+                shouldPassThrough = true
+            }
+
 			// For most modifier combinations, just pass them through
-            if e.State != 0 && e.State != xproto.ModMaskShift {
+            if shouldPassThrough {
                 xproto.AllowEvents(X.Conn(), xproto.AllowReplayKeyboard, xproto.TimeCurrentTime)
                 return
             }
 
-			if vp.enabled && len(keyStr) == 1 && 
-               ((keyStr[0] == ' ')|| (keyStr[0] >= 'a' && keyStr[0] <= 'z') || (keyStr[0] >= 'A' && keyStr[0] <= 'Z')) {
-                
-                intercepted, transformedText := vp.Process(keyStr, byte(e.Detail), e.State)
-                if intercepted {
-                    inject(X, transformedText, focusedWindow)
-                    xproto.AllowEvents(X.Conn(), xproto.AllowAsyncKeyboard, xproto.TimeCurrentTime)
-                    return
-                }
+			if vp.enabled {
+				intercepted, transformedText := vp.Process(keyStr, byte(e.Detail), e.State)
+				if intercepted {
+					inject(X, transformedText, focusedWindow)
+					xproto.AllowEvents(X.Conn(), xproto.AllowAsyncKeyboard, xproto.TimeCurrentTime)
+					return
+				}
+			
             }
 			xproto.AllowEvents(X.Conn(), xproto.AllowAsyncKeyboard, xproto.TimeCurrentTime)			
 		}).Connect(X, X.RootWin())
