@@ -40,6 +40,6 @@ Keyboard
 - Before this, get familiar with X11 functions through the tutorials in [xgbutil repository](https://github.com/BurntSushi/xgbutil)
 
 **Footnote**:   
-\* The name is a play off of [VietKey](https://vi.wikipedia.org/wiki/Vietkey)
+\* The name is a play off of [VietKey](https://vi.wikipedia.org/wiki/Vietkey)    
 \*\* The maintainer of ibus-bamboo also uses NixOS, so I'm pretty sure I'm 2 configurations away from making it work. But there is more character development in writing my own, so I'm doing it for the plot.    
 \*\*\* Stay tuned to see my answer to this question :) 
