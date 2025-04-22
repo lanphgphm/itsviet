@@ -95,7 +95,7 @@ func setupGlobalKeyCapturing(X *xgbutil.XUtil, vp *VProcessor) {
 				// Super+Space to toggle vietnamese typing
 				vp.Toggle()
 				if vp.enabled {
-					fmt.Println("Vietnamese typing enabled. itsvietbaby!")
+					fmt.Println("Vietnamese typing enabled. Enjoy NamKeyboard!")
 				} else {
 					fmt.Println("Vietnamese typing disabled.")
 				}
