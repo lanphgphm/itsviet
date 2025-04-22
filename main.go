@@ -110,34 +110,6 @@ func setupGlobalKeyCapturing(X *xgbutil.XUtil, vp *VProcessor) {
 			if e.Detail >= 67 && e.Detail <= 76 {
                 shouldPassThrough = true
             }
-			passThroughKeys := map[string]bool{
-                "Escape": true,
-                "Tab": true,
-                "Print": true,
-                "Scroll_Lock": true,
-                "Pause": true,
-                "Insert": true,
-                "Delete": true,
-                "Home": true,
-                "End": true,
-                "Prior": true,        // Page Up
-                "Next": true,         // Page Down
-                "Up": true,
-                "Down": true,
-                "Left": true,
-                "Right": true,
-                "Menu": true,         // Context menu key
-                "Caps_Lock": true,
-                "Num_Lock": true,
-                "Super_L": true,      // Windows/Super key
-                "Super_R": true,
-                "Alt_L": true,
-                "Alt_R": true,
-                "Control_L": true,
-                "Control_R": true,
-                "Shift_L": true,
-                "Shift_R": true,
-            }
             if passThroughKeys[keyStr] {
                 shouldPassThrough = true
             }
@@ -149,8 +121,8 @@ func setupGlobalKeyCapturing(X *xgbutil.XUtil, vp *VProcessor) {
             }
 
 			if vp.enabled {
-				intercepted, transformedText := vp.Process(keyStr, byte(e.Detail), e.State)
-				if intercepted {
+				shouldInject, transformedText := vp.Process(keyStr, byte(e.Detail), e.State)
+				if shouldInject {
 					inject(X, transformedText, focusedWindow)
 					xproto.AllowEvents(X.Conn(), xproto.AllowAsyncKeyboard, xproto.TimeCurrentTime)
 					return

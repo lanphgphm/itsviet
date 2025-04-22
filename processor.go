@@ -2,22 +2,27 @@ package main
 
 import (
 	"fmt"
-	// "strings"
 	"unicode"
 )
 
 type VProcessor struct {
 	buffer		string
-	lastWord	string
+	// lastWord	string
 	enabled		bool
 }
 
 func NewVProcessor() *VProcessor {
 	return &VProcessor{
 		buffer:		"", 
-		lastWord:	"", 
+		// lastWord:	"", 
 		enabled: 	true,
 	}
+}
+
+func (vp *VProcessor) Toggle() {
+	vp.enabled = !vp.enabled
+	vp.buffer = ""
+	// vp.lastWord = ""
 }
 
 func (vp *VProcessor) Process(keyStr string, keyCode byte, state uint16) (bool, string) {
@@ -31,18 +36,8 @@ func (vp *VProcessor) Process(keyStr string, keyCode byte, state uint16) (bool, 
 		- Alphabetical character: Intercept (this is the target)
 	*/
 
-	// BACKSPACE := 22 
-	if keyCode == 22 {
-		n := len(vp.buffer)
-		fmt.Printf("Buffer before backspace: '%s'\n", vp.buffer)
-		if n > 0 {
-			vp.buffer = vp.buffer[:n-1]
-			fmt.Printf("Buffer after backspace: '%s'\n", vp.buffer)
-		}
-		return false, ""
-	}
-
-	// dont intercept anything thats not a letter 
+	// if detect non-letter char, its time to inject the finished word 
+	// clear buffer for next word
 	if !unicode.IsLetter(rune(keyStr[0])) {
 		remainBuffer := vp.buffer + keyStr
 		fmt.Printf("Non-letter key detected: '%s' - clearing buffer\n", keyStr)
@@ -58,7 +53,6 @@ func (vp *VProcessor) Process(keyStr string, keyCode byte, state uint16) (bool, 
 	if needsTransform {
 		fmt.Printf("Transform triggered! Result: '%s'\n", transformed)
 		vp.buffer = transformed
-		// return true, transformed
 		return false, ""
 	}
 
@@ -71,28 +65,48 @@ func (vp *VProcessor) applyTelex() (bool, string) {
 	}
 
 	n := len(vp.buffer)
-	lastChar := vp.buffer[n-1]
+	lastChar := rune(vp.buffer[n-1])
+	pb := vp.buffer[:n-1] // pb = processedBuffer 
 
-	switch lastChar {
-	case 'a', 'A':
-		processedBuffer := vp.buffer[:n-1]
-		for i := len(processedBuffer)-1; i >= 0; i-- {
-			if processedBuffer[i] == 'a' || processedBuffer[i] == 'A' {
-				replacement := "â"
-				if processedBuffer[i] == 'A' {
-					replacement = "Â"
-				}
-				transformed := processedBuffer[:i] + replacement + processedBuffer[i+1:]
-				return true, transformed
-			}
+	targetIndex := -1 
+	for i := len(pb)-1; i>=0; i-- {
+	// for i := 0; i < len(pb); i++ {
+		r := rune(pb[i])
+		if isVietTarget(r) {
+			targetIndex = i
+			break
 		}
 	}
 
+	if targetIndex > -1 {
+		targetChar := rune(pb[targetIndex])
+		key := VietChar{
+			Target:		targetChar, 
+			Modifier:	lastChar, 
+		}
+
+		if replacement, exists := telexMod[key]; exists {
+			transformed := pb[:targetIndex] + replacement + pb[targetIndex+1:]
+			return true, transformed
+		}
+	}
+	
 	return false, ""
 }
 
-func (vp *VProcessor) Toggle() {
-	vp.enabled = !vp.enabled
-	vp.buffer = ""
-	vp.lastWord = ""
+func isVietTarget(r rune) bool {
+	targets := []rune{
+        'a', 'e', 'i', 'o', 'u', 'd',
+        'A', 'E', 'I', 'O', 'U', 'D',
+        'ă', 'â', 'ê', 'ô', 'ơ', 'ư',
+        'Ă', 'Â', 'Ê', 'Ô', 'Ơ', 'Ư',
+    }
+
+	for _, t := range targets {
+		if r == t {
+			return true
+		}
+	}
+
+	return false
 }
